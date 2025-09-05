@@ -15,6 +15,19 @@ ARG DEBIAN_FRONTEND=noninteractive
 # Configure rootless user environment for constrained conditions without escalated root privileges inside containers
 ARG TZ=UTC
 ENV PASSWD=mypasswd
+
+# Configure APT mirror for faster and more reliable downloads
+# Using Azure mirrors which are globally distributed and reliable
+# This is a separate layer to maximize cache efficiency
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://azure.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com/ubuntu/|http://azure.archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list && \
+    # For newer Ubuntu versions that use sources.list.d
+    if [ -d /etc/apt/sources.list.d ]; then \
+        find /etc/apt/sources.list.d -type f -name "*.list" -exec sed -i 's|http://archive.ubuntu.com/ubuntu/|http://azure.archive.ubuntu.com/ubuntu/|g' {} \; ; \
+        find /etc/apt/sources.list.d -type f -name "*.list" -exec sed -i 's|http://security.ubuntu.com/ubuntu/|http://azure.archive.ubuntu.com/ubuntu/|g' {} \; ; \
+    fi
+
+# Install base system packages and configure user
 RUN apt-get clean && apt-get update && apt-get dist-upgrade -y && apt-get install --no-install-recommends -y \
         apt-utils \
         dbus-user-session \
