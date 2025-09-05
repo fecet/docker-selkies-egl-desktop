@@ -12,7 +12,7 @@ on:
     branches: [ main ]
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: selkies-project/nvidia-egl-desktop
+  IMAGE_NAME: fecet/nvidia-egl-desktop
 jobs:
   build:
     name: Build and push Ubuntu ${{ matrix.os_version }}
@@ -21,6 +21,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
         - os_version: "20.04"
@@ -61,9 +62,10 @@ jobs:
           DISTRIB_RELEASE=${{ matrix.os_version }}
         context: .
         labels: ${{ steps.meta.outputs.labels }}
-        no-cache: true
         push: ${{ github.event_name != 'pull_request' }}
         tags: |
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.os_version }}
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.os_version }}-${{ env.COMMIT_TIME_GIT }}
           ${{ matrix.latest_tag && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
+        cache-from: type=gha,scope=${{ matrix.os_version }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.os_version }}
