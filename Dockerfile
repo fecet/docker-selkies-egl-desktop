@@ -31,7 +31,6 @@ RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|http://azure.archive.ubuntu.com/
 RUN apt-get clean && apt-get update && apt-get dist-upgrade -y && apt-get install --no-install-recommends -y \
         apt-utils \
         dbus-user-session \
-        fakeroot \
         fuse \
         kmod \
         locales \
@@ -42,9 +41,7 @@ RUN apt-get clean && apt-get update && apt-get dist-upgrade -y && apt-get instal
     apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/debconf/* /var/log/* /tmp/* /var/tmp/* && \
     locale-gen en_US.UTF-8 && \
     ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime && echo "${TZ}" > /etc/timezone && \
-    # Only use sudo-root for root-owned directory (/dev, /proc, /sys) or user/group permission operations, not for apt-get installation or file/directory operations
-    mv -f /usr/bin/sudo /usr/bin/sudo-root && \
-    ln -snf /usr/bin/fakeroot /usr/bin/sudo && \
+    # Keep the default sudo binary and configuration; run package installs as root during build
     # Check if UID 1000 exists and rename or create jovyan user
     if id -u 1000 >/dev/null 2>&1; then \
         EXISTING_USER=$(id -un 1000) && \
@@ -62,25 +59,19 @@ RUN apt-get clean && apt-get update && apt-get dist-upgrade -y && apt-get instal
         groupadd -g 1000 jovyan && \
         useradd -ms /bin/bash jovyan -u 1000 -g 1000; \
     fi && \
-    usermod -a -G adm,audio,cdrom,dialout,dip,fax,floppy,games,input,lp,plugdev,render,ssl-cert,sudo,tape,tty,video,voice jovyan && \
-    echo "jovyan ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    usermod -a -G adm,audio,cdrom,dialout,dip,fax,floppy,games,input,lp,plugdev,render,ssl-cert,tape,tty,video,voice jovyan && \
     echo "jovyan:${PASSWD}" | chpasswd && \
-    chown -R -f -h --no-preserve-root jovyan:jovyan / || echo 'Failed to set filesystem ownership in some paths to jovyan user' && \
-    # Preserve setuid/setgid removed by chown
-    chmod -f 4755 /usr/lib/dbus-1.0/dbus-daemon-launch-helper /usr/bin/chfn /usr/bin/chsh /usr/bin/mount /usr/bin/gpasswd /usr/bin/passwd /usr/bin/newgrp /usr/bin/umount /usr/bin/su /usr/bin/sudo-root /usr/bin/fusermount || echo 'Failed to set chmod setuid for some paths' && \
-    chmod -f 2755 /var/local /var/mail /usr/sbin/unix_chkpwd /usr/sbin/pam_extrausers_chkpwd /usr/bin/expiry /usr/bin/chage || echo 'Failed to set chmod setgid for some paths' && \
-    # Ensure apt directories exist with correct permissions
-    mkdir -p /var/lib/apt/lists/partial /var/cache/apt/archives/partial && \
-    chown -R jovyan:jovyan /var/lib/apt /var/cache/apt
+    # Preserve expected setuid/setgid bits for a few utilities that need them
+    chmod -f 4755 /usr/lib/dbus-1.0/dbus-daemon-launch-helper /usr/bin/chfn /usr/bin/chsh /usr/bin/mount /usr/bin/gpasswd /usr/bin/passwd /usr/bin/newgrp /usr/bin/umount /usr/bin/su /usr/bin/fusermount || echo 'Failed to set chmod setuid for some paths' && \
+    chmod -f 2755 /var/local /var/mail /usr/sbin/unix_chkpwd /usr/sbin/pam_extrausers_chkpwd /usr/bin/expiry /usr/bin/chage || echo 'Failed to set chmod setgid for some paths'
 
 # Set locales
 ENV LANG="en_US.UTF-8"
 ENV LANGUAGE="en_US:en"
 ENV LC_ALL="en_US.UTF-8"
 
-USER 1000
-# Use BUILDAH_FORMAT=docker in buildah
-SHELL ["/usr/bin/fakeroot", "--", "/bin/sh", "-c"]
+USER 0
+SHELL ["/bin/sh", "-c"]
 
 # Install operating system libraries or packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -649,10 +640,6 @@ turnserver \
 SHELL ["/bin/sh", "-c"]
 
 USER 0
-# Enable sudo through sudo-root with uid 0
-RUN if [ -d "/usr/libexec/sudo" ]; then SUDO_LIB="/usr/libexec/sudo"; else SUDO_LIB="/usr/lib/sudo"; fi && \
-    chown -R -f -h --no-preserve-root root:root /usr/bin/sudo-root /etc/sudo.conf /etc/sudoers /etc/sudoers.d /etc/sudo_logsrvd.conf "${SUDO_LIB}" || echo 'Failed to provide root permissions in some paths relevant to sudo' && \
-    chmod -f 4755 /usr/bin/sudo-root || echo 'Failed to set chmod setuid for root'
 
 RUN chown -R man:man /var/cache/man
 COPY ./root-ca.crt /usr/local/share/ca-certificates/myroot-ca.crt
